@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Route Chooser</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Route Chooser</h1>
+
+      <section class="trip">
+        <div id="from-field"></div>
+        <div id="to-field"></div>
+        <div class="actions">
+          <button id="compare" class="primary">Compare routes</button>
+        </div>
+      </section>
+
+      <p id="status" role="status"></p>
+      <section id="results"></section>
+
+      <details id="settings">
+        <summary>Settings</summary>
+        <label for="api-key">Google API key</label>
+        <input id="api-key" type="password" autocomplete="off" placeholder="Stored only in this browser" />
+        <h2>Saved places</h2>
+        <ul id="saved-places"></ul>
+        <p class="hint">
+          Choice points and penalties are edited in <code>choice-points.json</code>.
+        </p>
+      </details>
+
+      <details id="tech">
+        <summary>Tech details: Google API calls</summary>
+        <table id="usage">
+          <thead>
+            <tr><th>API (billing SKU)</th><th>Last compare</th><th>This page load</th><th>This month</th><th>Free per month</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <p class="hint">
+          "This month" counts calls made from this browser only; the Google Cloud Console has the
+          real total. Beyond the free allowance, Routes calls cost about $10 per 1,000 and
+          search suggestions about $2.83 per 1,000.
+        </p>
+        <h2>Calls, newest first</h2>
+        <div id="api-log"></div>
+      </details>
+    </main>
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>

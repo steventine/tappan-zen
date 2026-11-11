@@ -1,0 +1,291 @@
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --text: #1c1f23;
+  --muted: #5d6673;
+  --border: #d9dde3;
+  --accent: #1a66d6;
+  --accent-text: #ffffff;
+  --good: #1b7f4b;
+  --warn: #a15c00;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --surface: #1e2227;
+    --text: #e8eaed;
+    --muted: #9aa3af;
+    --border: #343a42;
+    --accent: #6ea8ff;
+    --accent-text: #0d1117;
+    --good: #5fd38d;
+    --warn: #f0b35a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.45 system-ui, sans-serif;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 12px;
+}
+
+h2 {
+  font-size: 1rem;
+  margin: 16px 0 6px;
+}
+
+label {
+  display: block;
+  margin: 12px 0 4px;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input,
+select,
+button,
+.button {
+  font: inherit;
+  color: inherit;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+input,
+select {
+  width: 100%;
+}
+
+button,
+.button {
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.search {
+  position: relative;
+  display: flex;
+  gap: 8px;
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+}
+
+.suggestions {
+  top: 100%;
+  position: absolute;
+  z-index: 1;
+  left: 0;
+  right: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.suggestions li {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.suggestions li:hover {
+  background: var(--bg);
+}
+
+.chips,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.chips button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.chips button {
+  min-height: 36px;
+  padding: 4px 12px;
+  border-radius: 18px;
+}
+
+#status {
+  color: var(--muted);
+  min-height: 1.5em;
+}
+
+#status.error {
+  color: var(--warn);
+}
+
+.route {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+
+.route.recommended {
+  border-color: var(--good);
+  border-width: 2px;
+}
+
+.route.reference {
+  border-style: dashed;
+}
+
+.route h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.route .tags {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--good);
+}
+
+.route .numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 10px;
+  color: var(--muted);
+}
+
+.route .numbers strong {
+  color: var(--text);
+  font-size: 1.15rem;
+}
+
+.route .links {
+  display: flex;
+  gap: 8px;
+}
+
+details {
+  margin-top: 24px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+#saved-places {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+#saved-places li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 12px;
+}
+
+th,
+td {
+  text-align: right;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+th:first-child,
+td:first-child {
+  text-align: left;
+}
+
+.call {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
+}
+
+.call summary {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.call.failed summary {
+  color: var(--warn);
+}
+
+.call h3 {
+  font-size: 0.8rem;
+  margin: 10px 0 4px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.call pre {
+  margin: 0;
+  padding: 8px;
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.78rem;
+}
