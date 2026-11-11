@@ -1,5 +1,6 @@
 // Page wiring: reads the trip from the form, runs the planner, and draws the comparison.
 
+import { planForks } from './forks.js';
 import { autocomplete, computeRoute, mapsLink, onApiCall } from './google.js';
 import { plan } from './planner.js';
 
@@ -24,6 +25,7 @@ const store = {
 
 let apiKey = store.get('apiKey', '');
 let savedPlaces = store.get('places', []); // [{ name, label, placeId? }]
+let routePlan = store.get('plan', {}); // choice point name -> alternative last navigated
 
 function el(tag, props = {}, children = []) {
   const node = Object.assign(document.createElement(tag), props);
@@ -176,33 +178,60 @@ function formatArrival(seconds) {
   return new Date(Date.now() + seconds * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+/** Remembers the alternatives of a route the driver chose, so later checks compare against it. */
+function rememberPlan(route) {
+  for (const alt of route.selection ?? []) routePlan[alt.choicePoint] = alt.name;
+  store.set('plan', routePlan);
+  renderPlanSummary();
+}
+
+function renderPlanSummary() {
+  const entries = Object.entries(routePlan);
+  $('plan-summary').textContent = entries.length
+    ? entries.map(([choicePoint, alt]) => `${choicePoint}: ${alt}`).join(' · ')
+    : 'Using the defaults (the lowest-penalty road at each choice point). Tapping Navigate on a route makes it the plan.';
+}
+
+/** Navigation must start from where the device is, so the origin is left out of the link. */
+function navigateLink(route, dest, props, children = []) {
+  return el(
+    'a',
+    {
+      href: mapsLink({ origin: null, destination: dest, vias: route.vias ?? [], navigate: true }),
+      target: '_blank',
+      rel: 'noopener',
+      onclick: () => rememberPlan(route),
+      ...props,
+    },
+    children,
+  );
+}
+
 function routeCard({ title, tags, route, fastestS, penaltyMinutes, className, origin, dest }) {
   const extraMinutes = Math.round((route.durationS - fastestS) / 60);
+  const approx = route.estimated ? '≈ ' : '';
   const numbers = [
-    el('strong', { textContent: formatDuration(route.durationS) }),
-    el('span', { textContent: `arrive ${formatArrival(route.durationS)}` }),
+    el('strong', { textContent: approx + formatDuration(route.durationS) }),
+    el('span', { textContent: `arrive ${approx}${formatArrival(route.durationS)}` }),
     el('span', { textContent: extraMinutes <= 0 ? 'fastest' : `+${extraMinutes} min vs fastest` }),
-    el('span', { textContent: `${Math.round(route.distanceM / 1609.34)} mi` }),
   ];
+  if (route.distanceM != null) numbers.push(el('span', { textContent: `${Math.round(route.distanceM / 1609.34)} mi` }));
   if (penaltyMinutes) numbers.push(el('span', { textContent: `penalty ${penaltyMinutes} min` }));
 
-  const vias = route.vias ?? [];
-  // Navigation must start from where the device is, so the origin is left out of that link.
-  const navigateUrl = mapsLink({ origin: null, destination: dest, vias, navigate: true });
-  const previewUrl = mapsLink({ origin, destination: dest, vias, navigate: false });
+  const previewUrl = mapsLink({ origin, destination: dest, vias: route.vias ?? [], navigate: false });
 
   return el('article', { className: `route ${className}` }, [
     el('div', { className: 'tags', textContent: tags.join(' · ') }),
     el('h3', { textContent: title }),
     el('div', { className: 'numbers' }, numbers),
     el('div', { className: 'links' }, [
-      el('a', { className: 'button primary', href: navigateUrl, target: '_blank', rel: 'noopener', textContent: 'Navigate' }),
+      navigateLink(route, dest, { className: 'button primary', textContent: 'Navigate' }),
       el('a', { className: 'button', href: previewUrl, target: '_blank', rel: 'noopener', textContent: 'Preview in Maps' }),
     ]),
   ]);
 }
 
-function renderResult(result, origin, dest) {
+function renderAll(result, origin, dest) {
   const cards = result.candidates.map((candidate) => {
     const tags = [];
     if (candidate === result.recommended) tags.push('Recommended');
@@ -252,18 +281,281 @@ $('compare').onclick = async () => {
       locate(fromField.value()),
       fetch('choice-points.json', { cache: 'no-store' }).then((response) => response.json()),
     ]);
-    const result = await plan({
+    const tab = activeTab;
+    const result = await VIEWS[tab].run({
       choicePoints: config.choicePoints,
       triggerRadiusM: config.triggerRadiusM,
       maxRoutes: config.maxRoutes,
+      plan: { ...routePlan },
       computeRoute: (vias, label) => computeRoute(apiKey, origin, dest, vias, label),
     });
-    renderResult(result, origin.isCurrentLocation ? null : origin, dest);
+    lastResults[tab] = [result, origin.isCurrentLocation ? null : origin, dest];
+    if (tab === activeTab) VIEWS[tab].render(...lastResults[tab]);
+    // The trip does not change during a drive: fold it away and leave just the refresh button.
+    $('trip-summary').textContent = `${origin.name ?? origin.label} → ${dest.name ?? dest.label}`;
+    $('trip').open = false;
+    $('compare').textContent = 'Refresh times';
   } catch (error) {
     setStatus(error.message, true);
   } finally {
     $('compare').disabled = false;
   }
+};
+
+// ---------- next decision view ----------
+
+function routeNotes(result) {
+  const notes = [];
+  if (result.truncated) notes.push('Route limit reached: some roads were not priced (raise maxRoutes in choice-points.json).');
+  for (const failure of result.failed) notes.push(`${failure.name} failed: ${failure.error}`);
+  setStatus(notes.join(' '), notes.length > 0);
+}
+
+const ICONS = {
+  preview:
+    '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg>',
+  navigate:
+    '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z"/></svg>',
+};
+
+/** Small Preview and Navigate buttons for a route. Tapping them does not select the card. */
+function routeIcons(route, origin, dest) {
+  const stop = (event) => event.stopPropagation();
+  const preview = el('a', {
+    className: 'icon',
+    href: mapsLink({ origin, destination: dest, vias: route.vias ?? [], navigate: false }),
+    target: '_blank',
+    rel: 'noopener',
+    title: 'Preview in Maps',
+    ariaLabel: `Preview ${route.name ?? "Google's route"} in Maps`,
+    innerHTML: ICONS.preview,
+  });
+  const navigate = navigateLink(route, dest, {
+    className: 'icon primary',
+    title: 'Navigate',
+    ariaLabel: `Navigate ${route.name ?? "Google's route"}`,
+    innerHTML: ICONS.navigate,
+  });
+  preview.addEventListener('click', stop);
+  navigate.addEventListener('click', stop);
+  // Navigate on the left and Preview on the far right, so a tap can't land on the wrong one.
+  return el('div', { className: 'tile-actions' }, [navigate, preview]);
+}
+
+/** "+5 min", "−8 min" or "same time", comparing a route with the selected one. */
+function relativeTo(selected, route) {
+  const minutes = Math.round((route.durationS - selected.durationS) / 60);
+  if (minutes === 0) return { text: 'same time', className: '' };
+  return minutes > 0
+    ? { text: `+${minutes} min`, className: 'slower' }
+    : { text: `−${-minutes} min`, className: 'faster' };
+}
+
+/**
+ * Works out which route is selected and what each card stands for. The selected route is the
+ * driver's pick at every fork; a card is "the selected route with this one fork changed".
+ */
+function decisionModel(result) {
+  const referenceName = {};
+  for (const alt of result.reference?.selection ?? []) referenceName[alt.choicePoint] = alt.name;
+
+  const picks = { ...referenceName };
+  for (const fork of result.forks) {
+    if (fork.tiles.some((tile) => tile.name === routePlan[fork.name])) picks[fork.name] = routePlan[fork.name];
+  }
+  const isStandalone = (forkName, altName) =>
+    result.forks.find((fork) => fork.name === forkName)?.tiles.find((tile) => tile.name === altName)?.standalone;
+
+  const standaloneRoute = (forkName, altName) =>
+    result.routes.find(
+      ({ selection }) => selection.length === 1 && selection[0].standalone && selection[0].choicePoint === forkName && selection[0].name === altName,
+    );
+  const combinedRoute = (names) =>
+    result.routes.find(({ selection }) => selection.every((alt) => !alt.standalone && names[alt.choicePoint] === alt.name));
+
+  // Picks to use for the combinable part of a route: a standalone pick falls back to the reference.
+  const combinablePicks = () =>
+    Object.fromEntries(
+      Object.entries(picks).map(([forkName, altName]) => [forkName, isStandalone(forkName, altName) ? referenceName[forkName] : altName]),
+    );
+
+  const routeForTile = (fork, tile) =>
+    tile.standalone ? standaloneRoute(fork.name, tile.name) : combinedRoute({ ...combinablePicks(), [fork.name]: tile.name });
+
+  const standalonePick = result.forks.find((fork) => isStandalone(fork.name, picks[fork.name]));
+  const selected = standalonePick ? standaloneRoute(standalonePick.name, picks[standalonePick.name]) : combinedRoute(picks);
+
+  /** Makes an alternative the driver's pick. Picking an ordinary road drops any standalone pick elsewhere. */
+  const pick = (fork, tile) => {
+    if (!tile.standalone) {
+      for (const [forkName, altName] of Object.entries(picks)) {
+        if (isStandalone(forkName, altName)) routePlan[forkName] = referenceName[forkName];
+      }
+    }
+    routePlan[fork.name] = tile.name;
+    store.set('plan', routePlan);
+    renderPlanSummary();
+  };
+
+  return { selected: selected ?? result.recommended, routeForTile, pick };
+}
+
+function verdict(result, selected) {
+  const { recommended } = result;
+  if (recommended === selected) {
+    return el('div', { className: 'verdict stay' }, [
+      el('strong', { textContent: 'Stay on plan' }),
+      el('span', { textContent: `${selected.name} · arrive ${formatArrival(selected.durationS)}` }),
+    ]);
+  }
+  // Name the first fork where the suggestion leaves the selected route.
+  const changes = recommended.selection.filter((alt) => !selected.selection.includes(alt));
+  const change = changes.length === 1 ? changes[0] : recommended;
+  const minutes = Math.round((selected.durationS - recommended.durationS) / 60);
+  const comparison =
+    minutes > 0 ? `${minutes} min faster than` : minutes < 0 ? `${-minutes} min slower but preferred over` : 'same time as';
+  return el('div', { className: 'verdict switch' }, [
+    el('strong', { textContent: `Suggested: take ${change.name}` }),
+    el('span', {
+      textContent: `${recommended.name} · arrive ${formatArrival(recommended.durationS)} · ${comparison} ${selected.name}`,
+    }),
+  ]);
+}
+
+function tileContents({ name, route, selected, isSelected, notes, origin, dest }) {
+  const approx = route.estimated ? '≈ ' : '';
+  const relative = isSelected ? { text: 'selected', className: '' } : relativeTo(selected, route);
+  return [
+    el('span', { className: 'tile-name', textContent: name }),
+    el('strong', { textContent: `${approx}${formatArrival(route.durationS)}` }),
+    el('span', { className: `relative ${relative.className}`, textContent: [relative.text, ...notes].join(' · ') }),
+    routeIcons(route, origin, dest),
+  ];
+}
+
+function forkCard(fork, isNext, model, result, rerender, origin, dest) {
+  const tiles = fork.tiles
+    .map((tile) => ({ tile, route: model.routeForTile(fork, tile) }))
+    .filter(({ route }) => route)
+    .map(({ tile, route }) => {
+      const isSelected = model.selected.selection.some((alt) => alt.choicePoint === fork.name && alt.name === tile.name);
+      const notes = [];
+      if (result.recommended.selection.some((alt) => alt.choicePoint === fork.name && alt.name === tile.name)) notes.push('suggested');
+      if (tile.penaltyMinutes) notes.push(`penalty ${tile.penaltyMinutes}`);
+      const select = () => {
+        model.pick(fork, tile);
+        rerender();
+      };
+      return el(
+        'div',
+        {
+          className: `tile selectable ${isSelected ? 'selected' : ''}`,
+          role: 'button',
+          tabIndex: 0,
+          ariaPressed: String(isSelected),
+          onclick: select,
+          onkeydown: (event) => {
+            if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) select();
+          },
+        },
+        tileContents({ name: tile.name, route, selected: model.selected, isSelected, notes, origin, dest }),
+      );
+    });
+  return el('article', { className: `fork ${isNext ? 'next' : ''}` }, [
+    el('h3', { textContent: `${isNext ? 'Next' : 'Then'}: ${fork.name}` }),
+    el('div', { className: 'tiles' }, tiles),
+  ]);
+}
+
+function renderDecision(result, origin, dest) {
+  const card = (route, extra) => routeCard({ route, fastestS: result.fastestS, origin, dest, ...extra });
+  const baselineCard = card(result.baseline, {
+    title: "Google's own route",
+    tags: [result.recommended ? 'For reference, not ranked' : 'No choice points on this trip'],
+    className: 'reference',
+  });
+  if (!result.recommended) {
+    $('results').replaceChildren(baselineCard);
+    return routeNotes(result);
+  }
+
+  const model = decisionModel(result);
+  const rerender = () => renderDecision(result, origin, dest);
+  const googleRow = el('article', { className: 'fork' }, [
+    el('h3', { textContent: "Google's own choice (no waypoints)" }),
+    el('div', { className: 'tiles' }, [
+      el(
+        'div',
+        { className: 'tile reference' },
+        tileContents({
+          name: "Google's fastest",
+          route: result.baseline,
+          selected: model.selected,
+          isSelected: false,
+          notes: [],
+          origin,
+          dest,
+        }),
+      ),
+    ]),
+  ]);
+  const allRoutes = el('details', { className: 'all-routes' }, [
+    el('summary', {
+      textContent: `All ${result.routes.length} routes (≈ marks times estimated from the per-fork differences)`,
+    }),
+    ...result.routes.map((route) =>
+      card(route, {
+        title: route.name,
+        tags: [
+          ...(route === result.recommended ? ['Recommended'] : []),
+          ...(route === model.selected ? ['Selected'] : []),
+          ...(route.matchesBaseline ? ["Google's pick"] : []),
+        ],
+        penaltyMinutes: route.penaltyMinutes,
+        className: route === result.recommended ? 'recommended' : '',
+      }),
+    ),
+    baselineCard,
+  ]);
+  $('results').replaceChildren(
+    verdict(result, model.selected),
+    ...result.forks
+      .filter((fork) => fork.tiles.length > 1)
+      .map((fork, i) => forkCard(fork, i === 0, model, result, rerender, origin, dest)),
+    googleRow,
+    allRoutes,
+  );
+  routeNotes(result);
+}
+
+// ---------- tabs ----------
+
+const VIEWS = {
+  decision: { run: planForks, render: renderDecision },
+  all: { run: plan, render: renderAll },
+};
+const lastResults = {};
+let activeTab = store.get('tab', 'decision');
+
+function showTab(tab) {
+  activeTab = VIEWS[tab] ? tab : 'decision';
+  store.set('tab', activeTab);
+  for (const button of document.querySelectorAll('.tabs button')) {
+    button.ariaSelected = String(button.dataset.tab === activeTab);
+    button.onclick = () => showTab(button.dataset.tab);
+  }
+  if (lastResults[activeTab]) {
+    VIEWS[activeTab].render(...lastResults[activeTab]);
+  } else {
+    $('results').replaceChildren();
+    setStatus(apiKey ? 'Press Compare routes to price this view.' : '');
+  }
+}
+
+$('reset-plan').onclick = () => {
+  routePlan = {};
+  store.set('plan', routePlan);
+  renderPlanSummary();
 };
 
 // ---------- tech details: API usage and call log ----------
@@ -334,7 +626,9 @@ $('api-key').onchange = () => {
 };
 
 renderPlaces();
+renderPlanSummary();
 usage.render();
+showTab(activeTab);
 if (!apiKey) {
   $('settings').open = true;
   setStatus('Add your Google API key under Settings to get started.');

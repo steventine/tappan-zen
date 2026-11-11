@@ -289,3 +289,193 @@ td:first-child {
   border-radius: 8px;
   font-size: 0.78rem;
 }
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+}
+
+.tabs button[aria-selected='true'] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.verdict {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  border: 2px solid var(--good);
+  background: var(--surface);
+}
+
+.verdict strong {
+  font-size: 1.5rem;
+  color: var(--good);
+}
+
+.verdict.switch {
+  border-color: var(--warn);
+}
+
+.verdict.switch strong {
+  color: var(--warn);
+}
+
+.verdict span {
+  color: var(--muted);
+}
+
+.fork {
+  margin-bottom: 14px;
+}
+
+.fork h3 {
+  margin: 0 0 6px;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.tiles {
+  display: flex;
+  gap: 8px;
+}
+
+.tile {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.tile .tile-name {
+  color: var(--text);
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.tile strong {
+  color: var(--text);
+  font-size: 1.1rem;
+}
+
+.fork.next .tile {
+  padding: 16px 12px;
+}
+
+.fork.next .tile .tile-name {
+  font-size: 1.25rem;
+}
+
+.fork.next .tile strong {
+  font-size: 1.4rem;
+}
+
+.all-routes {
+  margin-top: 8px;
+}
+
+.all-routes summary {
+  margin-bottom: 10px;
+}
+
+.tile.selectable {
+  cursor: pointer;
+}
+
+.tile.selected {
+  border: 2px solid var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.tile.selected .tile-name {
+  color: var(--accent);
+}
+
+.tile.reference {
+  border-style: dashed;
+}
+
+.tile .relative.faster {
+  color: var(--good);
+  font-weight: 600;
+}
+
+.tile .relative.slower {
+  color: var(--warn);
+}
+
+.tile-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.icon.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-text);
+}
+
+.tile-actions {
+  justify-content: space-between;
+}
+
+.icon {
+  flex: 0 1 44px;
+  min-width: 34px;
+}
+
+#trip {
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+#trip summary {
+  color: var(--text);
+  font-weight: 600;
+  padding: 6px 0;
+  overflow-wrap: anywhere;
+}
+
+.actions .primary {
+  flex: 1;
+  justify-content: center;
+  min-height: 52px;
+  font-size: 1.05rem;
+}

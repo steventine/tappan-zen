@@ -8,13 +8,14 @@
       "alternatives": [
         {
           "name": "I-684",
+          "default": true,
           "penaltyMinutes": 0,
           "forward": [[41.118929, -73.706123]],
           "reverse": [[41.118608, -73.705785]]
         },
         {
           "name": "Saw Mill",
-          "penaltyMinutes": 0,
+          "penaltyMinutes": 5,
           "forward": [[41.13142, -73.795199]],
           "reverse": [[41.131429, -73.795107]]
         }
@@ -26,6 +27,7 @@
       "alternatives": [
         {
           "name": "Cuomo Bridge",
+          "default": true,
           "penaltyMinutes": 0,
           "forward": [[41.071316, -73.890784]],
           "reverse": [[41.070907, -73.890766]]
@@ -33,6 +35,7 @@
         {
           "name": "NYC / GWB",
           "penaltyMinutes": 30,
+          "standalone": true,
           "forward": [[40.851102, -73.949379]],
           "reverse": [[40.850954, -73.949453]]
         }
@@ -43,20 +46,21 @@
       "bearing": 200,
       "alternatives": [
         {
-          "name": "Palisades",
-          "penaltyMinutes": 0,
-          "forward": [[40.959402, -73.919663]],
-          "reverse": [[40.95864, -73.918877]]
-        },
-        {
           "name": "Garden State Pkwy",
-          "penaltyMinutes": 3,
+          "default": true,
+          "penaltyMinutes": 0,
           "forward": [[41.049565, -74.066572]],
           "reverse": [[41.049561, -74.065234]]
         },
         {
+          "name": "Palisades",
+          "penaltyMinutes": 5,
+          "forward": [[40.959402, -73.919663]],
+          "reverse": [[40.95864, -73.918877]]
+        },
+        {
           "name": "I-287",
-          "penaltyMinutes": 8,
+          "penaltyMinutes": 0,
           "forward": [[41.085377, -74.16863]],
           "reverse": [[41.085353, -74.168294]]
         }

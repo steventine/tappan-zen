@@ -19,13 +19,42 @@ function alternativesFor(choicePoint, direction) {
       choicePoint: choicePoint.name,
       name: alt.name,
       penaltyMinutes: alt.penaltyMinutes ?? 0,
+      standalone: alt.standalone === true,
+      isDefault: alt.default === true,
       vias: alt[direction].map(toPoint),
     }));
 }
 
-/** True when the path passes close to any alternative of the choice point. */
-function isTriggered(alternatives, path, radiusM) {
-  return alternatives.some((alt) => alt.vias.some((via) => distanceToPath(via, path) <= radiusM));
+/**
+ * True when the path passes close to any alternative of the choice point, somewhere ahead.
+ * A point whose closest approach is the trip's own starting position has already been driven
+ * past, so it does not count.
+ */
+export function isTriggered(alternatives, path, radiusM, origin) {
+  return alternatives.some((alt) =>
+    alt.vias.some((via) => {
+      const distance = distanceToPath(via, path);
+      const fromOrigin = haversine(origin, via);
+      return distance <= radiusM && (fromOrigin > radiusM || distance < 0.8 * fromOrigin);
+    }),
+  );
+}
+
+/** One group of alternatives per choice point, oriented for the trip's direction of travel. */
+export function orientChoicePoints(choicePoints, tripBearing, triggerRadiusM) {
+  return choicePoints
+    .map((cp) => ({
+      name: cp.name,
+      radiusM: cp.triggerRadiusM ?? triggerRadiusM,
+      alternatives: alternativesFor(cp, pickDirection(cp, tripBearing)),
+    }))
+    .filter((group) => group.alternatives.length > 0);
+}
+
+/** Sort order for choice points: the way the trip meets them. */
+export function byDistanceFrom(origin) {
+  return (a, b) =>
+    haversine(origin, a.alternatives[0].vias[0]) - haversine(origin, b.alternatives[0].vias[0]);
 }
 
 /** Every way of picking one alternative from each group. */
@@ -49,20 +78,13 @@ export async function plan({ choicePoints, computeRoute, triggerRadiusM = 2000, 
   const destination = baseline.path[baseline.path.length - 1];
   const tripBearing = bearing(origin, destination);
 
-  // Groups of alternatives, one per choice point, oriented for this trip's direction.
-  const pending = choicePoints
-    .map((cp) => ({
-      name: cp.name,
-      radiusM: cp.triggerRadiusM ?? triggerRadiusM,
-      alternatives: alternativesFor(cp, pickDirection(cp, tripBearing)),
-    }))
-    .filter((group) => group.alternatives.length > 0);
+  const pending = orientChoicePoints(choicePoints, tripBearing, triggerRadiusM);
   const active = [];
 
   const activateTriggered = (path) => {
     let added = false;
     for (let i = pending.length - 1; i >= 0; i--) {
-      if (isTriggered(pending[i].alternatives, path, pending[i].radiusM)) {
+      if (isTriggered(pending[i].alternatives, path, pending[i].radiusM, origin)) {
         active.push(...pending.splice(i, 1));
         added = true;
       }
@@ -82,10 +104,7 @@ export async function plan({ choicePoints, computeRoute, triggerRadiusM = 2000, 
   // no new choice points appear.
   while (active.length > 0) {
     // Order the choice points the way the trip meets them.
-    active.sort(
-      (a, b) =>
-        haversine(origin, a.alternatives[0].vias[0]) - haversine(origin, b.alternatives[0].vias[0]),
-    );
+    active.sort(byDistanceFrom(origin));
     const selections = combinations(active.map((group) => group.alternatives));
     const keyOf = (selection) => selection.map((alt) => `${alt.choicePoint}=${alt.name}`).join('|');
 

@@ -11,12 +11,20 @@
       <h1>Route Chooser</h1>
 
       <section class="trip">
-        <div id="from-field"></div>
-        <div id="to-field"></div>
+        <details id="trip" open>
+          <summary id="trip-summary">Trip</summary>
+          <div id="from-field"></div>
+          <div id="to-field"></div>
+        </details>
         <div class="actions">
           <button id="compare" class="primary">Compare routes</button>
         </div>
       </section>
+
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="decision">Next decision</button>
+        <button role="tab" data-tab="all">All combinations</button>
+      </nav>
 
       <p id="status" role="status"></p>
       <section id="results"></section>
@@ -27,6 +35,9 @@
         <input id="api-key" type="password" autocomplete="off" placeholder="Stored only in this browser" />
         <h2>Saved places</h2>
         <ul id="saved-places"></ul>
+        <h2>Planned route</h2>
+        <p id="plan-summary" class="hint"></p>
+        <button id="reset-plan">Reset to defaults</button>
         <p class="hint">
           Choice points and penalties are edited in <code>choice-points.json</code>.
         </p>

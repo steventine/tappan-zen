@@ -27,9 +27,20 @@ search suggestions, and without it a typed address still works.
 | `triggerRadiusM` | How close a route must pass to a choice point for it to be considered. |
 | `maxRoutes` | Upper limit on routes priced per comparison (each one is a billed Routes API call). |
 
-A choice point is only considered when Google's own route, or one of the alternatives already
-being priced, passes near it. Every combination of the relevant alternatives is priced, and the
-lowest `travel time + penalties` is recommended.
+| `alternatives[].default` | `true` for the road that is part of your plan until you select a different one. Without it, the lowest-penalty road is used. |
+| `alternatives[].standalone` | `true` for a road that is a complete route on its own (driving through NYC). It is priced once with only its own pass-through points and never combined with other choice points. |
+
+A choice point is only considered when Google's own route, or a route already being priced,
+passes near it ahead of the starting position. The lowest `travel time + penalties` is recommended.
+
+## Two views
+
+- **Next decision** prices one reference route (your plan: the lowest-penalty road at each choice
+  point until you tap Navigate on something else) plus one variation per other alternative.
+  Other combinations are estimated by adding up the per-fork differences and marked with ≈; an
+  estimated winner is confirmed with one real call. Roughly `2 + number of alternatives` calls.
+- **All combinations** prices every combination for real. Exact, but the call count multiplies
+  with each choice point.
 
 ## Tests
 
