@@ -1,8 +1,7 @@
-// Route planning: decides which choice points matter for a trip, prices every combination of
-// their alternatives, and ranks the results. No network or browser code lives here; the caller
-// supplies `computeRoute`.
+// Choice point helpers shared by the route planner in forks.js: which direction a trip takes
+// through a choice point, whether a route passes it, and how alternatives combine.
 
-import { angleDiff, bearing, distanceToPath, haversine } from './geo.js';
+import { angleDiff, distanceToPath, haversine } from './geo.js';
 
 const toPoint = ([lat, lng]) => ({ lat, lng });
 
@@ -63,99 +62,4 @@ export function combinations(groups) {
     (partial, group) => partial.flatMap((picked) => group.map((alt) => [...picked, alt])),
     [[]],
   );
-}
-
-/**
- * @param {object} options
- * @param {Array} options.choicePoints  entries from choice-points.json
- * @param {(vias: {lat:number,lng:number}[], label: string) => Promise<{durationS:number, distanceM:number, path:{lat:number,lng:number}[]}>} options.computeRoute
- * @param {number} [options.triggerRadiusM]  how close a route must pass to a choice point for it to count
- * @param {number} [options.maxRoutes]  upper limit on priced routes per plan
- */
-export async function plan({ choicePoints, computeRoute, triggerRadiusM = 2000, maxRoutes = 16 }) {
-  const baseline = await computeRoute([], "Google's own route");
-  const origin = baseline.path[0];
-  const destination = baseline.path[baseline.path.length - 1];
-  const tripBearing = bearing(origin, destination);
-
-  const pending = orientChoicePoints(choicePoints, tripBearing, triggerRadiusM);
-  const active = [];
-
-  const activateTriggered = (path) => {
-    let added = false;
-    for (let i = pending.length - 1; i >= 0; i--) {
-      if (isTriggered(pending[i].alternatives, path, pending[i].radiusM, origin)) {
-        active.push(...pending.splice(i, 1));
-        added = true;
-      }
-    }
-    return added;
-  };
-
-  const priced = new Map(); // combination key -> candidate
-  let pricedCount = 1; // the baseline
-  let truncated = false;
-  let candidates = [];
-
-  activateTriggered(baseline.path);
-
-  // Pricing a combination can reveal a choice point the baseline never went near (for example
-  // the New Jersey side only shows up once a route crosses the Cuomo Bridge), so repeat until
-  // no new choice points appear.
-  while (active.length > 0) {
-    // Order the choice points the way the trip meets them.
-    active.sort(byDistanceFrom(origin));
-    const selections = combinations(active.map((group) => group.alternatives));
-    const keyOf = (selection) => selection.map((alt) => `${alt.choicePoint}=${alt.name}`).join('|');
-
-    let unpriced = selections.filter((selection) => !priced.has(keyOf(selection)));
-    if (unpriced.length > maxRoutes - pricedCount) {
-      unpriced = unpriced.slice(0, Math.max(0, maxRoutes - pricedCount));
-      truncated = true;
-    }
-    pricedCount += unpriced.length;
-
-    await Promise.all(
-      unpriced.map(async (selection) => {
-        const candidate = {
-          name: selection.map((alt) => alt.name).join(' → '),
-          selection,
-          vias: selection.flatMap((alt) => alt.vias),
-          penaltyMinutes: selection.reduce((sum, alt) => sum + alt.penaltyMinutes, 0),
-        };
-        try {
-          Object.assign(candidate, await computeRoute(candidate.vias, candidate.name));
-          candidate.scoreS = candidate.durationS + candidate.penaltyMinutes * 60;
-        } catch (error) {
-          candidate.error = error.message;
-        }
-        priced.set(keyOf(selection), candidate);
-      }),
-    );
-
-    candidates = selections.map((selection) => priced.get(keyOf(selection))).filter(Boolean);
-    if (truncated) break;
-    const newChoicePoint = candidates
-      .filter((candidate) => !candidate.error)
-      .map((candidate) => activateTriggered(candidate.path))
-      .some(Boolean);
-    if (!newChoicePoint) break;
-  }
-
-  const usable = candidates.filter((candidate) => !candidate.error);
-  usable.sort((a, b) => a.scoreS - b.scoreS);
-  for (const candidate of usable) {
-    // A candidate that follows the same roads as the unconstrained route is "what Google would do".
-    candidate.matchesBaseline = candidate.vias.every((via) => distanceToPath(via, baseline.path) <= 150);
-  }
-
-  return {
-    baseline,
-    candidates: usable,
-    failed: candidates.filter((candidate) => candidate.error),
-    recommended: usable[0] ?? null,
-    fastestS: Math.min(baseline.durationS, ...usable.map((candidate) => candidate.durationS)),
-    choicePointNames: active.map((group) => group.name),
-    truncated,
-  };
 }

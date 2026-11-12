@@ -290,26 +290,8 @@ td:first-child {
   font-size: 0.78rem;
 }
 
-.tabs {
-  display: flex;
-  gap: 4px;
-  margin-top: 20px;
-  border-bottom: 1px solid var(--border);
-}
 
-.tabs button {
-  border: none;
-  border-bottom: 3px solid transparent;
-  border-radius: 0;
-  background: none;
-  color: var(--muted);
-}
 
-.tabs button[aria-selected='true'] {
-  border-bottom-color: var(--accent);
-  color: var(--text);
-  font-weight: 600;
-}
 
 .verdict {
   display: flex;

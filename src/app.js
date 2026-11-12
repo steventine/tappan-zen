@@ -2,7 +2,6 @@
 
 import { planForks } from './forks.js';
 import { autocomplete, computeRoute, mapsLink, onApiCall } from './google.js';
-import { plan } from './planner.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -173,7 +172,6 @@ toField = createPlaceField($('to-field'), { title: 'To', allowCurrentLocation: f
 
 /** Forgets priced results, for when the trip itself has changed. */
 function clearResults() {
-  for (const tab of Object.keys(lastResults)) delete lastResults[tab];
   $('results').replaceChildren();
   $('compare').textContent = 'Compare routes';
   setStatus('Trip changed. Press Compare routes to price it.');
@@ -294,42 +292,6 @@ function routeCard({ title, tags, route, fastestS, penaltyMinutes, className, or
   ]);
 }
 
-function renderAll(result, origin, dest) {
-  const cards = result.candidates.map((candidate) => {
-    const tags = [];
-    if (candidate === result.recommended) tags.push('Recommended');
-    if (candidate.matchesBaseline) tags.push("Google's pick");
-    return routeCard({
-      title: candidate.name,
-      tags,
-      route: candidate,
-      fastestS: result.fastestS,
-      penaltyMinutes: candidate.penaltyMinutes,
-      className: candidate === result.recommended ? 'recommended' : '',
-      origin,
-      dest,
-    });
-  });
-  cards.push(
-    routeCard({
-      title: "Google's own route",
-      tags: [result.candidates.length ? 'For reference, not ranked' : 'No choice points on this trip'],
-      route: result.baseline,
-      fastestS: result.fastestS,
-      className: 'reference',
-      origin,
-      dest,
-    }),
-  );
-  $('results').replaceChildren(...cards);
-
-  const notes = [];
-  if (result.choicePointNames.length) notes.push(`Choice points on this trip: ${result.choicePointNames.join(', ')}.`);
-  if (result.truncated) notes.push('Too many combinations: only some were priced (raise maxRoutes in choice-points.json).');
-  for (const failure of result.failed) notes.push(`${failure.name} failed: ${failure.error}`);
-  setStatus(notes.join(' '), result.truncated || result.failed.length > 0);
-}
-
 $('compare').onclick = async () => {
   const dest = toField.value();
   if (!apiKey) return setStatus('Add your Google API key under Settings first.', true);
@@ -344,16 +306,14 @@ $('compare').onclick = async () => {
       locate(fromField.value()),
       fetch('choice-points.json', { cache: 'no-store' }).then((response) => response.json()),
     ]);
-    const tab = activeTab;
-    const result = await VIEWS[tab].run({
+    const result = await planForks({
       choicePoints: config.choicePoints,
       triggerRadiusM: config.triggerRadiusM,
       maxRoutes: config.maxRoutes,
       plan: { ...routePlan },
       computeRoute: (vias, label) => computeRoute(apiKey, origin, dest, vias, label),
     });
-    lastResults[tab] = [result, origin.isCurrentLocation ? null : origin, dest];
-    if (tab === activeTab) VIEWS[tab].render(...lastResults[tab]);
+    renderDecision(result, origin.isCurrentLocation ? null : origin, dest);
     // The trip does not change during a drive: fold it away and leave just the refresh button.
     $('trip').open = false;
     // Remember where a trip from "Current location" began, so it can be reversed later.
@@ -369,7 +329,7 @@ $('compare').onclick = async () => {
   }
 };
 
-// ---------- next decision view ----------
+// ---------- results: verdict, fork cards, full list ----------
 
 function routeNotes(result) {
   const notes = [];
@@ -595,30 +555,6 @@ function renderDecision(result, origin, dest) {
   routeNotes(result);
 }
 
-// ---------- tabs ----------
-
-const VIEWS = {
-  decision: { run: planForks, render: renderDecision },
-  all: { run: plan, render: renderAll },
-};
-const lastResults = {};
-let activeTab = store.get('tab', 'decision');
-
-function showTab(tab) {
-  activeTab = VIEWS[tab] ? tab : 'decision';
-  store.set('tab', activeTab);
-  for (const button of document.querySelectorAll('.tabs button')) {
-    button.ariaSelected = String(button.dataset.tab === activeTab);
-    button.onclick = () => showTab(button.dataset.tab);
-  }
-  if (lastResults[activeTab]) {
-    VIEWS[activeTab].render(...lastResults[activeTab]);
-  } else {
-    $('results').replaceChildren();
-    setStatus(apiKey ? 'Press Compare routes to price this view.' : '');
-  }
-}
-
 $('reset-plan').onclick = () => {
   routePlan = {};
   store.set('plan', routePlan);
@@ -695,7 +631,6 @@ $('api-key').onchange = () => {
 renderPlaces();
 renderPlanSummary();
 usage.render();
-showTab(activeTab);
 if (!apiKey) {
   $('settings').open = true;
   setStatus('Add your Google API key under Settings to get started.');
