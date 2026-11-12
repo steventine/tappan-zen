@@ -479,3 +479,7 @@ td:first-child {
   min-height: 52px;
   font-size: 1.05rem;
 }
+
+#swap {
+  min-height: 52px;
+}

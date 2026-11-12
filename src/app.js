@@ -46,7 +46,7 @@ const CURRENT_LOCATION = { label: 'Current location', isCurrentLocation: true };
  * A search box with suggestions, a save button, and shortcut chips.
  * With `allowCurrentLocation`, an empty box means "where I am now".
  */
-function createPlaceField(root, { title, allowCurrentLocation }) {
+function createPlaceField(root, { title, allowCurrentLocation, onChange }) {
   let picked = null; // a suggestion or saved place; null means "use whatever is typed"
   let searchTimer;
 
@@ -82,6 +82,19 @@ function createPlaceField(root, { title, allowCurrentLocation }) {
     input.value = picked ? picked.label : '';
     suggestions.hidden = true;
     renderChips();
+    onChange();
+  };
+
+  /** Puts a place into the field from code (restoring after a reload, or reversing the trip). */
+  const set = (place) => {
+    if (!place || place.isCurrentLocation) return choose(CURRENT_LOCATION);
+    // Reuse the saved shortcut when there is one, so its chip lights up.
+    const saved = savedPlaces.find((s) => s.name === place.name && s.label === place.label);
+    if (saved || place.placeId || place.latLng) return choose(saved ?? place);
+    picked = null; // plain typed text
+    input.value = place.label;
+    renderChips();
+    onChange();
   };
 
   const chip = (text, place) =>
@@ -97,6 +110,7 @@ function createPlaceField(root, { title, allowCurrentLocation }) {
   input.addEventListener('input', () => {
     picked = null;
     renderChips();
+    onChange();
     clearTimeout(searchTimer);
     const text = input.value.trim();
     if (!apiKey || text.length < 3) {
@@ -126,14 +140,63 @@ function createPlaceField(root, { title, allowCurrentLocation }) {
     store.set('places', savedPlaces);
     picked = saved;
     renderPlaces();
+    onChange();
   };
 
   renderChips();
-  return { value, renderChips };
+  return { value, renderChips, set };
 }
 
-const fromField = createPlaceField($('from-field'), { title: 'From', allowCurrentLocation: true });
-const toField = createPlaceField($('to-field'), { title: 'To', allowCurrentLocation: false });
+/** Keeps the trip header and the stored trip in step with the two fields. */
+function tripChanged() {
+  if (!fromField || !toField) return; // still being created
+  const from = fromField.value();
+  const to = toField.value();
+  const nameOf = (place) => place?.name ?? place?.label;
+  $('trip-summary').textContent = to ? `${nameOf(from)} → ${nameOf(to)}` : 'Trip';
+  const keep = (place) =>
+    !place || place.isCurrentLocation
+      ? null
+      : { name: place.name, label: place.label, placeId: place.placeId, latLng: place.latLng };
+  store.set('trip', { from: keep(from), to: keep(to) });
+}
+
+let fromField = null;
+let toField = null;
+fromField = createPlaceField($('from-field'), { title: 'From', allowCurrentLocation: true, onChange: tripChanged });
+toField = createPlaceField($('to-field'), { title: 'To', allowCurrentLocation: false, onChange: tripChanged });
+{
+  const { from, to } = store.get('trip', {});
+  fromField.set(from);
+  if (to) toField.set(to);
+}
+
+/** Forgets priced results, for when the trip itself has changed. */
+function clearResults() {
+  for (const tab of Object.keys(lastResults)) delete lastResults[tab];
+  $('results').replaceChildren();
+  $('compare').textContent = 'Compare routes';
+  setStatus('Trip changed. Press Compare routes to price it.');
+}
+
+// Reverse the trip. With a real From place the two simply trade places. With "Current location"
+// there is no place to trade, so To becomes the spot where the last trip started.
+$('swap').onclick = () => {
+  const from = fromField.value();
+  const to = toField.value();
+  if (!from.isCurrentLocation) {
+    fromField.set(to);
+    toField.set(from);
+  } else {
+    const start = store.get('tripStart', null);
+    if (!start) {
+      $('trip').open = true;
+      return setStatus('No earlier trip start is remembered yet. Pick where you are heading under To.', true);
+    }
+    toField.set({ label: 'Start of last trip', latLng: start.latLng });
+  }
+  clearResults();
+};
 
 function renderPlaces() {
   fromField.renderChips();
@@ -292,8 +355,12 @@ $('compare').onclick = async () => {
     lastResults[tab] = [result, origin.isCurrentLocation ? null : origin, dest];
     if (tab === activeTab) VIEWS[tab].render(...lastResults[tab]);
     // The trip does not change during a drive: fold it away and leave just the refresh button.
-    $('trip-summary').textContent = `${origin.name ?? origin.label} → ${dest.name ?? dest.label}`;
     $('trip').open = false;
+    // Remember where a trip from "Current location" began, so it can be reversed later.
+    // Refreshing mid-drive (same destination) must not overwrite it.
+    if (origin.isCurrentLocation && store.get('tripStart', null)?.destLabel !== dest.label) {
+      store.set('tripStart', { destLabel: dest.label, latLng: origin.latLng });
+    }
     $('compare').textContent = 'Refresh times';
   } catch (error) {
     setStatus(error.message, true);
