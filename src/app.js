@@ -378,13 +378,13 @@ function routeIcons(route, origin, dest) {
   return el('div', { className: 'tile-actions' }, [navigate, preview]);
 }
 
-/** "+5 min", "−8 min" or "same time", comparing a route with the selected one. */
+/** "+5 min", "8 min faster" or "same time", comparing a route with the selected one. */
 function relativeTo(selected, route) {
   const minutes = Math.round((route.durationS - selected.durationS) / 60);
   if (minutes === 0) return { text: 'same time', className: '' };
   return minutes > 0
     ? { text: `+${minutes} min`, className: 'slower' }
-    : { text: `−${-minutes} min`, className: 'faster' };
+    : { text: `${-minutes} min faster`, className: 'faster' };
 }
 
 /**
