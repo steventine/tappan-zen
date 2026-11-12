@@ -39,12 +39,29 @@ export function isTriggered(alternatives, path, radiusM, origin) {
   );
 }
 
+/**
+ * True when one of the alternatives lies roughly between the start and the destination: it is
+ * closer to the destination than the start is (so not already behind), and driving via it adds
+ * no more than `ratio` to the straight-line distance. This keeps a choice point on screen even
+ * when today's traffic sends every priced route down some third road that passes none of its
+ * points.
+ */
+export function isOnTheWay(alternatives, origin, destination, ratio) {
+  const direct = haversine(origin, destination);
+  return alternatives.some((alt) => {
+    const via = alt.vias[0];
+    const remaining = haversine(via, destination);
+    return remaining < direct && haversine(origin, via) + remaining <= ratio * direct;
+  });
+}
+
 /** One group of alternatives per choice point, oriented for the trip's direction of travel. */
-export function orientChoicePoints(choicePoints, tripBearing, triggerRadiusM) {
+export function orientChoicePoints(choicePoints, tripBearing, triggerRadiusM, onTheWayRatio) {
   return choicePoints
     .map((cp) => ({
       name: cp.name,
       radiusM: cp.triggerRadiusM ?? triggerRadiusM,
+      onTheWayRatio: cp.onTheWayRatio ?? onTheWayRatio,
       alternatives: alternativesFor(cp, pickDirection(cp, tripBearing)),
     }))
     .filter((group) => group.alternatives.length > 0);

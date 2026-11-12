@@ -8,7 +8,7 @@
 // forks: it is priced once as a complete route with only its own pass-through points.
 
 import { bearing, distanceToPath } from './geo.js';
-import { byDistanceFrom, combinations, isTriggered, orientChoicePoints } from './planner.js';
+import { byDistanceFrom, combinations, isOnTheWay, isTriggered, orientChoicePoints } from './planner.js';
 
 const keyOf = (selection) => selection.map((alt) => `${alt.choicePoint}=${alt.name}`).join('|');
 
@@ -18,19 +18,32 @@ const keyOf = (selection) => selection.map((alt) => `${alt.choicePoint}=${alt.na
  * @param {(vias: {lat:number,lng:number}[], label: string) => Promise<{durationS:number, distanceM:number, path:{lat:number,lng:number}[]}>} options.computeRoute
  * @param {Record<string,string>} [options.plan]  choice point name -> alternative the driver last chose
  * @param {number} [options.triggerRadiusM]
+ * @param {number} [options.onTheWayRatio]  how much longer than the straight line a trip via a fork may be for the fork to count as on the way (0 turns this off)
  * @param {number} [options.maxRoutes]  upper limit on priced routes per plan
  */
-export async function planForks({ choicePoints, computeRoute, plan = {}, triggerRadiusM = 2000, maxRoutes = 16 }) {
+export async function planForks({
+  choicePoints,
+  computeRoute,
+  plan = {},
+  triggerRadiusM = 2000,
+  onTheWayRatio = 1.15,
+  maxRoutes = 16,
+}) {
   const baseline = await computeRoute([], "Google's own route");
   const origin = baseline.path[0];
   const destination = baseline.path[baseline.path.length - 1];
 
-  const pending = orientChoicePoints(choicePoints, bearing(origin, destination), triggerRadiusM);
+  const pending = orientChoicePoints(choicePoints, bearing(origin, destination), triggerRadiusM, onTheWayRatio);
   const forks = [];
   const activateTriggered = (path) => {
     let added = false;
     for (let i = pending.length - 1; i >= 0; i--) {
-      if (isTriggered(pending[i].alternatives, path, pending[i].radiusM, origin)) {
+      const group = pending[i];
+      // A fork counts when a priced route drives past it, or when it simply lies on the way.
+      if (
+        isTriggered(group.alternatives, path, group.radiusM, origin) ||
+        isOnTheWay(group.alternatives, origin, destination, group.onTheWayRatio)
+      ) {
         forks.push(...pending.splice(i, 1));
         added = true;
       }

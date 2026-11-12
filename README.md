@@ -31,8 +31,10 @@ search suggestions, and without it a typed address still works.
 | `alternatives[].default` | `true` for the road that is part of your plan until you select a different one. Without it, the lowest-penalty road is used. |
 | `alternatives[].standalone` | `true` for a road that is a complete route on its own (driving through NYC). It is priced once with only its own pass-through points and never combined with other choice points. |
 
-A choice point is only considered when Google's own route, or a route already being priced,
-passes near it ahead of the starting position. The lowest `travel time + penalties` is recommended.
+| `onTheWayRatio` | A choice point also counts when it lies between the start and the destination: driving via it may be at most this many times the straight-line distance (default `1.15`; `0` turns this off). Can be set per choice point too. |
+
+A choice point is considered when Google's own route, or a route already being priced, passes
+near it ahead of the starting position, or when it lies on the way by the `onTheWayRatio` test. The lowest `travel time + penalties` is recommended.
 
 ## How routes are priced
 

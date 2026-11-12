@@ -158,8 +158,16 @@ function tripChanged() {
       ? null
       : { name: place.name, label: place.label, placeId: place.placeId, latLng: place.latLng };
   store.set('trip', { from: keep(from), to: keep(to) });
+
+  // Times on screen belong to the old trip: clear them once either end really changes.
+  // (Saving a place as a shortcut only gives it a name, so that does not count.)
+  const identity = (place) => place && [place.label, place.placeId, place.latLng?.lat, place.latLng?.lng];
+  const signature = JSON.stringify([identity(keep(from)), identity(keep(to))]);
+  if (signature !== tripSignature && $('results').childElementCount > 0) clearResults();
+  tripSignature = signature;
 }
 
+let tripSignature = null;
 let fromField = null;
 let toField = null;
 fromField = createPlaceField($('from-field'), { title: 'From', allowCurrentLocation: true, onChange: tripChanged });
@@ -309,6 +317,7 @@ $('compare').onclick = async () => {
     const result = await planForks({
       choicePoints: config.choicePoints,
       triggerRadiusM: config.triggerRadiusM,
+      onTheWayRatio: config.onTheWayRatio,
       maxRoutes: config.maxRoutes,
       plan: { ...routePlan },
       computeRoute: (vias, label) => computeRoute(apiKey, origin, dest, vias, label),
