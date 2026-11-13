@@ -458,9 +458,12 @@ function verdict(result, selected) {
   ]);
 }
 
-function tileContents({ name, route, selected, isSelected, notes, origin, dest }) {
+function tileContents({ name, route, selected, isSelected, isSuggested = false, notes, origin, dest }) {
   const approx = route.estimated ? '≈ ' : '';
-  const relative = isSelected ? { text: 'selected', className: '' } : relativeTo(selected, route);
+  // The selected tile is green when it is the suggested road at this fork, amber when it is not.
+  const relative = isSelected
+    ? { text: 'selected', className: isSuggested ? 'faster' : 'slower' }
+    : relativeTo(selected, route);
   return [
     el('span', { className: 'tile-name', textContent: name }),
     el('strong', { className: `duration ${relative.className}`, textContent: `${approx}${formatDuration(route.durationS)}` }),
@@ -471,13 +474,21 @@ function tileContents({ name, route, selected, isSelected, notes, origin, dest }
 }
 
 function forkCard(fork, isNext, model, result, rerender, origin, dest) {
-  const tiles = fork.tiles
-    .map((tile) => ({ tile, route: model.routeForTile(fork, tile) }))
-    .filter(({ route }) => route)
+  const isSuggestedTile = (tile) =>
+    result.recommended.selection.some((alt) => alt.choicePoint === fork.name && alt.name === tile.name);
+  const priced = fork.tiles.map((tile) => ({ tile, route: model.routeForTile(fork, tile) })).filter(({ route }) => route);
+  const suggestedRoute = priced.find(({ tile }) => isSuggestedTile(tile))?.route;
+  const tiles = priced
     .map(({ tile, route }) => {
       const isSelected = model.selected.selection.some((alt) => alt.choicePoint === fork.name && alt.name === tile.name);
       const notes = [];
-      if (result.recommended.selection.some((alt) => alt.choicePoint === fork.name && alt.name === tile.name)) notes.push('suggested');
+      const isSuggested = isSuggestedTile(tile);
+      // A selected road that isn't the suggestion says how much slower it is than the suggestion.
+      if (isSelected && !isSuggested && suggestedRoute) {
+        const slowerBy = relativeTo(suggestedRoute, route);
+        if (slowerBy.className === 'slower') notes.push(slowerBy.text);
+      }
+      if (isSuggested) notes.push('suggested');
       if (tile.penaltyMinutes) notes.push(`penalty ${tile.penaltyMinutes}`);
       const select = () => {
         model.pick(fork, tile);
@@ -495,7 +506,7 @@ function forkCard(fork, isNext, model, result, rerender, origin, dest) {
             if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) select();
           },
         },
-        tileContents({ name: tile.name, route, selected: model.selected, isSelected, notes, origin, dest }),
+        tileContents({ name: tile.name, route, selected: model.selected, isSelected, isSuggested, notes, origin, dest }),
       );
     });
   return el('article', { className: `fork ${isNext ? 'next' : ''}` }, [
