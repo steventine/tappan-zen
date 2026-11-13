@@ -441,7 +441,7 @@ function verdict(result, selected) {
   if (recommended === selected) {
     return el('div', { className: 'verdict stay' }, [
       el('strong', { textContent: 'Stay on plan' }),
-      el('span', { textContent: `${selected.name} · arrive ${formatArrival(selected.durationS)}` }),
+      el('span', { textContent: `${selected.name} · ${formatDuration(selected.durationS)} · arrive ${formatArrival(selected.durationS)}` }),
     ]);
   }
   // Name the first fork where the suggestion leaves the selected route.
@@ -453,7 +453,7 @@ function verdict(result, selected) {
   return el('div', { className: 'verdict switch' }, [
     el('strong', { textContent: `Suggested: take ${change.name}` }),
     el('span', {
-      textContent: `${recommended.name} · arrive ${formatArrival(recommended.durationS)} · ${comparison} ${selected.name}`,
+      textContent: `${recommended.name} · ${formatDuration(recommended.durationS)} · arrive ${formatArrival(recommended.durationS)} · ${comparison} ${selected.name}`,
     }),
   ]);
 }
@@ -463,7 +463,8 @@ function tileContents({ name, route, selected, isSelected, notes, origin, dest }
   const relative = isSelected ? { text: 'selected', className: '' } : relativeTo(selected, route);
   return [
     el('span', { className: 'tile-name', textContent: name }),
-    el('strong', { textContent: `${approx}${formatArrival(route.durationS)}` }),
+    el('strong', { className: 'duration', textContent: `${approx}${formatDuration(route.durationS)}` }),
+    el('span', { className: 'arrival', textContent: `${approx}${formatArrival(route.durationS)}` }),
     el('span', { className: `relative ${relative.className}`, textContent: [relative.text, ...notes].join(' · ') }),
     routeIcons(route, origin, dest),
   ];

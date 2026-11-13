@@ -363,6 +363,18 @@ td:first-child {
   font-size: 1.1rem;
 }
 
+.tile .duration {
+  font-size: 1.5rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile .arrival {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .fork.next .tile {
   padding: 16px 12px;
 }
@@ -373,6 +385,10 @@ td:first-child {
 
 .fork.next .tile strong {
   font-size: 1.4rem;
+}
+
+.fork.next .tile .duration {
+  font-size: 1.9rem;
 }
 
 .all-routes {
