@@ -463,8 +463,8 @@ function tileContents({ name, route, selected, isSelected, notes, origin, dest }
   const relative = isSelected ? { text: 'selected', className: '' } : relativeTo(selected, route);
   return [
     el('span', { className: 'tile-name', textContent: name }),
-    el('strong', { className: 'duration', textContent: `${approx}${formatDuration(route.durationS)}` }),
-    el('span', { className: 'arrival', textContent: `${approx}${formatArrival(route.durationS)}` }),
+    el('strong', { className: `duration ${relative.className}`, textContent: `${approx}${formatDuration(route.durationS)}` }),
+    el('span', { className: `arrival ${relative.className}`, textContent: `${approx}${formatArrival(route.durationS)}` }),
     el('span', { className: `relative ${relative.className}`, textContent: [relative.text, ...notes].join(' · ') }),
     routeIcons(route, origin, dest),
   ];

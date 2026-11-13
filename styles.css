@@ -416,12 +416,19 @@ td:first-child {
   border-style: dashed;
 }
 
-.tile .relative.faster {
+.tile .relative.faster,
+.tile .duration.faster,
+.tile .arrival.faster {
   color: var(--good);
+}
+
+.tile .relative.faster {
   font-weight: 600;
 }
 
-.tile .relative.slower {
+.tile .relative.slower,
+.tile .duration.slower,
+.tile .arrival.slower {
   color: var(--warn);
 }
 
