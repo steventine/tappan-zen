@@ -313,6 +313,10 @@ td:first-child {
   border-color: var(--warn);
 }
 
+.verdict.selectable {
+  cursor: pointer;
+}
+
 .verdict.switch strong {
   color: var(--warn);
 }

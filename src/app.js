@@ -436,12 +436,23 @@ function decisionModel(result) {
   return { selected: selected ?? result.recommended, routeForTile, pick };
 }
 
-function verdict(result, selected) {
+function verdict(result, selected, onAccept) {
   const { recommended } = result;
+  // How the selected route compares with Google's own route; left out when they take the same time.
+  const vsGoogle = Math.round((selected.durationS - result.baseline.durationS) / 60);
+  const googleDelta =
+    vsGoogle === 0
+      ? []
+      : [
+          el('span', {
+            textContent: `Selected route is ${Math.abs(vsGoogle)} min ${vsGoogle > 0 ? 'slower' : 'faster'} than Google's fastest`,
+          }),
+        ];
   if (recommended === selected) {
     return el('div', { className: 'verdict stay' }, [
       el('strong', { textContent: 'Stay on plan' }),
       el('span', { textContent: `${selected.name} · ${formatDuration(selected.durationS)} · arrive ${formatArrival(selected.durationS)}` }),
+      ...googleDelta,
     ]);
   }
   // Name the first fork where the suggestion leaves the selected route.
@@ -450,12 +461,31 @@ function verdict(result, selected) {
   const minutes = Math.round((selected.durationS - recommended.durationS) / 60);
   const comparison =
     minutes > 0 ? `${minutes} min faster than` : minutes < 0 ? `${-minutes} min slower but preferred over` : 'same time as';
-  return el('div', { className: 'verdict switch' }, [
-    el('strong', { textContent: `Suggested: take ${change.name}` }),
-    el('span', {
-      textContent: `${recommended.name} · ${formatDuration(recommended.durationS)} · arrive ${formatArrival(recommended.durationS)} · ${comparison} ${selected.name}`,
-    }),
-  ]);
+  // Tapping the suggestion selects its roads in the fork rows below.
+  return el(
+    'div',
+    {
+      className: 'verdict switch selectable',
+      role: 'button',
+      tabIndex: 0,
+      title: 'Select the suggested route',
+      onclick: onAccept,
+      onkeydown: (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onAccept();
+        }
+      },
+    },
+    [
+      el('strong', { textContent: `Suggested: take ${change.name}` }),
+      el('span', {
+        textContent: `${recommended.name} · ${formatDuration(recommended.durationS)} · arrive ${formatArrival(recommended.durationS)}`,
+      }),
+      el('span', { textContent: `${comparison} ${selected.name}` }),
+      ...googleDelta,
+    ],
+  );
 }
 
 function tileContents({ name, route, selected, isSelected, isSuggested = false, notes, origin, dest }) {
@@ -565,8 +595,16 @@ function renderDecision(result, origin, dest) {
     ),
     baselineCard,
   ]);
+  const acceptSuggestion = () => {
+    for (const alt of result.recommended.selection) {
+      const fork = result.forks.find((f) => f.name === alt.choicePoint);
+      const tile = fork?.tiles.find((t) => t.name === alt.name);
+      if (tile) model.pick(fork, tile);
+    }
+    rerender();
+  };
   $('results').replaceChildren(
-    verdict(result, model.selected),
+    verdict(result, model.selected, acceptSuggestion),
     ...result.forks
       .filter((fork) => fork.tiles.length > 1)
       .map((fork, i) => forkCard(fork, i === 0, model, result, rerender, origin, dest)),
