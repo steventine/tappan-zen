@@ -45,13 +45,6 @@
           "standalone": true,
           "forward": [[40.851102, -73.949379]],
           "reverse": [[40.850954, -73.949453]]
-        },
-        {
-          "name": "Newburgh-Beacon Bridge",
-          "penaltyMinutes": 0,
-          "standalone": true,
-          "forward": [[41.519798, -73.995]],
-          "reverse": [[41.519311, -73.995]]
         }
       ]
     },
