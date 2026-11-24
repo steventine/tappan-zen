@@ -19,7 +19,11 @@ search suggestions, and without it a typed address still works.
 
 ## Choice points
 
-`choice-points.json` lists the places where two or more roads do the same job.
+Each region has its own tab and its own file in `regions/`, listing the places where two or more
+roads do the same job: `regions/ny-nj.json` (Hudson crossings) and `regions/pittsburgh.json`.
+Regions are kept apart on purpose, so their choice points are never combined. The trip at the top
+is shared; Compare prices only the open tab, and each tab keeps its own results and route plan.
+To add a region, add a file and one line to `REGIONS` in `src/app.js`.
 
 | Field | Meaning |
 |---|---|

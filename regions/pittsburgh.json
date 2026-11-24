@@ -1,0 +1,81 @@
+{
+  "triggerRadiusM": 2000,
+  "maxRoutes": 24,
+  "choicePoints": [
+    {
+      "name": "State College approach",
+      "bearing": 270,
+      "onTheWayRatio": 0,
+      "alternatives": [
+        {
+          "name": "I-80",
+          "default": true,
+          "penaltyMinutes": 0,
+          "forward": [[40.996956, -78.220551]],
+          "reverse": [[40.995792, -78.220711]]
+        },
+        {
+          "name": "PA-22",
+          "penaltyMinutes": 20,
+          "standalone": true,
+          "forward": [[40.451773, -79.15217]],
+          "reverse": [[40.451655, -79.152156]]
+        }
+      ]
+    },
+    {
+      "name": "Past Pittsburgh",
+      "bearing": 250,
+      "onTheWayRatio": 0,
+      "alternatives": [
+        {
+          "name": "Grove City",
+          "default": true,
+          "penaltyMinutes": 0,
+          "forward": [[41.18989340268061, -79.86799475570163]],
+          "reverse": [[41.18957045058446, -79.8681449593938]]
+        },
+        {
+          "name": "New Bethlehem",
+          "penaltyMinutes": 5,
+          "forward": [[40.99482284374742, -79.34214755468963]],
+          "reverse": [[40.99482284374742, -79.34214755468963]]
+        },
+        {
+          "name": "PA-22",
+          "penaltyMinutes": 20,
+          "standalone": true,
+          "forward": [[40.451773, -79.15217]],
+          "reverse": [[40.451655, -79.152156]]
+        }
+      ]
+    },
+    {
+      "name": "Into Ohio",
+      "bearing": 250,
+      "onTheWayRatio": 0,
+      "alternatives": [
+        {
+          "name": "I-79",
+          "default": true,
+          "penaltyMinutes": 0,
+          "forward": [[40.93881, -80.13501]],
+          "reverse": [[40.939777, -80.135109]]
+        },
+        {
+          "name": "I-376",
+          "penaltyMinutes": 5,
+          "forward": [[40.992579, -80.390826]],
+          "reverse": [[40.994769, -80.387999]]
+        },
+        {
+          "name": "OH-11",
+          "penaltyMinutes": 5,
+          "standalone": true,
+          "forward": [[40.834744, -80.737677]],
+          "reverse": [[40.832892, -80.73844]]
+        }
+      ]
+    }
+  ]
+}

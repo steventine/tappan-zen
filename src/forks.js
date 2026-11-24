@@ -14,7 +14,7 @@ const keyOf = (selection) => selection.map((alt) => `${alt.choicePoint}=${alt.na
 
 /**
  * @param {object} options
- * @param {Array} options.choicePoints  entries from choice-points.json
+ * @param {Array} options.choicePoints  entries from a regions/*.json file
  * @param {(vias: {lat:number,lng:number}[], label: string) => Promise<{durationS:number, distanceM:number, path:{lat:number,lng:number}[]}>} options.computeRoute
  * @param {Record<string,string>} [options.plan]  choice point name -> alternative the driver last chose
  * @param {number} [options.triggerRadiusM]

@@ -24,7 +24,6 @@ const store = {
 
 let apiKey = store.get('apiKey', '');
 let savedPlaces = store.get('places', []); // [{ name, label, placeId? }]
-let routePlan = store.get('plan', {}); // choice point name -> alternative last navigated
 
 function el(tag, props = {}, children = []) {
   const node = Object.assign(document.createElement(tag), props);
@@ -32,10 +31,79 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
-function setStatus(message, isError = false) {
-  $('status').textContent = message;
-  $('status').classList.toggle('error', isError);
+// ---------- regions: each tab has its own choice points, results and route plan ----------
+// The trip, saved places and API key above and below the tabs are shared by all regions.
+
+const REGIONS = [
+  { id: 'ny-nj', name: 'NY/NJ', file: 'regions/ny-nj.json' },
+  { id: 'pittsburgh', name: 'Pittsburgh', file: 'regions/pittsburgh.json' },
+];
+for (const region of REGIONS) {
+  region.plan = store.get(`plan.${region.id}`, null); // choice point name -> alternative last navigated
+  region.status = { message: '', isError: false };
+  region.resultsEl = el('div', { hidden: true });
+  $('results').append(region.resultsEl);
 }
+// A plan saved before there were regions belongs to NY/NJ.
+REGIONS[0].plan ??= store.get('plan', {});
+for (const region of REGIONS) region.plan ??= {};
+
+let activeRegion = REGIONS.find((region) => region.id === store.get('region', null)) ?? REGIONS[0];
+
+const savePlan = (region) => store.set(`plan.${region.id}`, region.plan);
+
+/** Sets a region's status line; it shows when that region's tab is open. */
+function setStatus(message, isError = false, region = activeRegion) {
+  region.status = { message, isError };
+  if (region === activeRegion) showStatus();
+}
+
+function showStatus() {
+  $('status').textContent = activeRegion.status.message;
+  $('status').classList.toggle('error', activeRegion.status.isError);
+}
+
+function updateCompareLabel() {
+  $('compare').textContent = activeRegion.resultsEl.childElementCount > 0 ? 'Refresh times' : 'Compare routes';
+}
+
+function selectRegion(region) {
+  activeRegion = region;
+  store.set('region', region.id);
+  for (const r of REGIONS) r.resultsEl.hidden = r !== region;
+  $('region-panel').setAttribute('aria-labelledby', `tab-${region.id}`);
+  renderTabs();
+  showStatus();
+  updateCompareLabel();
+  renderPlanSummary();
+}
+
+function renderTabs() {
+  $('region-tabs').replaceChildren(
+    ...REGIONS.map((region) => {
+      const isActive = region === activeRegion;
+      const tab = el('button', {
+        id: `tab-${region.id}`,
+        textContent: region.name,
+        tabIndex: isActive ? 0 : -1,
+        onclick: () => selectRegion(region),
+      });
+      tab.setAttribute('role', 'tab');
+      tab.setAttribute('aria-selected', String(isActive));
+      tab.setAttribute('aria-controls', 'region-panel');
+      return tab;
+    }),
+  );
+}
+
+// Arrow keys move between tabs, as screen-reader users expect of a tab list.
+$('region-tabs').addEventListener('keydown', (event) => {
+  const step = { ArrowRight: 1, ArrowLeft: -1 }[event.key];
+  if (!step) return;
+  const i = (REGIONS.indexOf(activeRegion) + step + REGIONS.length) % REGIONS.length;
+  selectRegion(REGIONS[i]);
+  $(`tab-${REGIONS[i].id}`).focus();
+});
 
 // ---------- place fields (From and To share one design) ----------
 
@@ -163,7 +231,8 @@ function tripChanged() {
   // (Saving a place as a shortcut only gives it a name, so that does not count.)
   const identity = (place) => place && [place.label, place.placeId, place.latLng?.lat, place.latLng?.lng];
   const signature = JSON.stringify([identity(keep(from)), identity(keep(to))]);
-  if (signature !== tripSignature && $('results').childElementCount > 0) clearResults();
+  const hasResults = REGIONS.some((region) => region.resultsEl.childElementCount > 0);
+  if (signature !== tripSignature && hasResults) clearResults();
   tripSignature = signature;
 }
 
@@ -178,11 +247,13 @@ toField = createPlaceField($('to-field'), { title: 'To', allowCurrentLocation: f
   if (to) toField.set(to);
 }
 
-/** Forgets priced results, for when the trip itself has changed. */
+/** Forgets priced results in every region, for when the trip itself has changed. */
 function clearResults() {
-  $('results').replaceChildren();
-  $('compare').textContent = 'Compare routes';
-  setStatus('Trip changed. Press Compare routes to price it.');
+  for (const region of REGIONS) {
+    region.resultsEl.replaceChildren();
+    setStatus('Trip changed. Press Compare routes to price it.', false, region);
+  }
+  updateCompareLabel();
 }
 
 // Reverse the trip. With a real From place the two simply trade places. With "Current location"
@@ -248,35 +319,36 @@ function formatArrival(seconds) {
 }
 
 /** Remembers the alternatives of a route the driver chose, so later checks compare against it. */
-function rememberPlan(route) {
-  for (const alt of route.selection ?? []) routePlan[alt.choicePoint] = alt.name;
-  store.set('plan', routePlan);
+function rememberPlan(region, route) {
+  for (const alt of route.selection ?? []) region.plan[alt.choicePoint] = alt.name;
+  savePlan(region);
   renderPlanSummary();
 }
 
 function renderPlanSummary() {
-  const entries = Object.entries(routePlan);
+  $('plan-heading').textContent = `Planned route: ${activeRegion.name}`;
+  const entries = Object.entries(activeRegion.plan);
   $('plan-summary').textContent = entries.length
     ? entries.map(([choicePoint, alt]) => `${choicePoint}: ${alt}`).join(' · ')
     : 'Using the defaults (the lowest-penalty road at each choice point). Tapping Navigate on a route makes it the plan.';
 }
 
 /** Navigation must start from where the device is, so the origin is left out of the link. */
-function navigateLink(route, dest, props, children = []) {
+function navigateLink(region, route, dest, props, children = []) {
   return el(
     'a',
     {
       href: mapsLink({ origin: null, destination: dest, vias: route.vias ?? [], navigate: true }),
       target: '_blank',
       rel: 'noopener',
-      onclick: () => rememberPlan(route),
+      onclick: () => rememberPlan(region, route),
       ...props,
     },
     children,
   );
 }
 
-function routeCard({ title, tags, route, fastestS, penaltyMinutes, className, origin, dest }) {
+function routeCard({ region, title, tags, route, fastestS, penaltyMinutes, className, origin, dest }) {
   const extraMinutes = Math.round((route.durationS - fastestS) / 60);
   const approx = route.estimated ? '≈ ' : '';
   const numbers = [
@@ -294,35 +366,38 @@ function routeCard({ title, tags, route, fastestS, penaltyMinutes, className, or
     el('h3', { textContent: title }),
     el('div', { className: 'numbers' }, numbers),
     el('div', { className: 'links' }, [
-      navigateLink(route, dest, { className: 'button primary', textContent: 'Navigate' }),
+      navigateLink(region, route, dest, { className: 'button primary', textContent: 'Navigate' }),
       el('a', { className: 'button', href: previewUrl, target: '_blank', rel: 'noopener', textContent: 'Preview in Maps' }),
     ]),
   ]);
 }
 
 $('compare').onclick = async () => {
+  // Only the open tab is priced: each compare is a batch of billed Routes calls.
+  // The region is fixed here, so switching tabs mid-compare still lands the results in the right one.
+  const region = activeRegion;
   const dest = toField.value();
   if (!apiKey) return setStatus('Add your Google API key under Settings first.', true);
   if (!dest) return setStatus('Enter a destination first.', true);
 
   $('compare').disabled = true;
-  $('results').replaceChildren();
-  setStatus('Checking live traffic…');
+  region.resultsEl.replaceChildren();
+  setStatus('Checking live traffic…', false, region);
   usage.startCompare();
   try {
     const [origin, config] = await Promise.all([
       locate(fromField.value()),
-      fetch('choice-points.json', { cache: 'no-store' }).then((response) => response.json()),
+      fetch(region.file, { cache: 'no-store' }).then((response) => response.json()),
     ]);
     const result = await planForks({
       choicePoints: config.choicePoints,
       triggerRadiusM: config.triggerRadiusM,
       onTheWayRatio: config.onTheWayRatio,
       maxRoutes: config.maxRoutes,
-      plan: { ...routePlan },
+      plan: { ...region.plan },
       computeRoute: (vias, label) => computeRoute(apiKey, origin, dest, vias, label),
     });
-    renderDecision(result, origin.isCurrentLocation ? null : origin, dest);
+    renderDecision(region, result, origin.isCurrentLocation ? null : origin, dest);
     // The trip does not change during a drive: fold it away and leave just the refresh button.
     $('trip').open = false;
     // Remember where a trip from "Current location" began, so it can be reversed later.
@@ -330,21 +405,21 @@ $('compare').onclick = async () => {
     if (origin.isCurrentLocation && store.get('tripStart', null)?.destLabel !== dest.label) {
       store.set('tripStart', { destLabel: dest.label, latLng: origin.latLng });
     }
-    $('compare').textContent = 'Refresh times';
   } catch (error) {
-    setStatus(error.message, true);
+    setStatus(error.message, true, region);
   } finally {
     $('compare').disabled = false;
+    updateCompareLabel();
   }
 };
 
 // ---------- results: verdict, fork cards, full list ----------
 
-function routeNotes(result) {
+function routeNotes(region, result) {
   const notes = [];
-  if (result.truncated) notes.push('Route limit reached: some roads were not priced (raise maxRoutes in choice-points.json).');
+  if (result.truncated) notes.push(`Route limit reached: some roads were not priced (raise maxRoutes in ${region.file}).`);
   for (const failure of result.failed) notes.push(`${failure.name} failed: ${failure.error}`);
-  setStatus(notes.join(' '), notes.length > 0);
+  setStatus(notes.join(' '), notes.length > 0, region);
 }
 
 const ICONS = {
@@ -355,7 +430,7 @@ const ICONS = {
 };
 
 /** Small Preview and Navigate buttons for a route. Tapping them does not select the card. */
-function routeIcons(route, origin, dest) {
+function routeIcons(region, route, origin, dest) {
   const stop = (event) => event.stopPropagation();
   const preview = el('a', {
     className: 'icon',
@@ -366,7 +441,7 @@ function routeIcons(route, origin, dest) {
     ariaLabel: `Preview ${route.name ?? "Google's route"} in Maps`,
     innerHTML: ICONS.preview,
   });
-  const navigate = navigateLink(route, dest, {
+  const navigate = navigateLink(region, route, dest, {
     className: 'icon primary',
     title: 'Navigate',
     ariaLabel: `Navigate ${route.name ?? "Google's route"}`,
@@ -395,13 +470,14 @@ function relativeTo(selected, route) {
  * Works out which route is selected and what each card stands for. The selected route is the
  * driver's pick at every fork; a card is "the selected route with this one fork changed".
  */
-function decisionModel(result) {
+function decisionModel(region, result) {
+  const plan = region.plan;
   const referenceName = {};
   for (const alt of result.reference?.selection ?? []) referenceName[alt.choicePoint] = alt.name;
 
   const picks = { ...referenceName };
   for (const fork of result.forks) {
-    if (fork.tiles.some((tile) => tile.name === routePlan[fork.name])) picks[fork.name] = routePlan[fork.name];
+    if (fork.tiles.some((tile) => tile.name === plan[fork.name])) picks[fork.name] = plan[fork.name];
   }
   const isStandalone = (forkName, altName) =>
     result.forks.find((fork) => fork.name === forkName)?.tiles.find((tile) => tile.name === altName)?.standalone;
@@ -429,11 +505,11 @@ function decisionModel(result) {
   const pick = (fork, tile) => {
     if (!tile.standalone) {
       for (const [forkName, altName] of Object.entries(picks)) {
-        if (isStandalone(forkName, altName)) routePlan[forkName] = referenceName[forkName];
+        if (isStandalone(forkName, altName)) plan[forkName] = referenceName[forkName];
       }
     }
-    routePlan[fork.name] = tile.name;
-    store.set('plan', routePlan);
+    plan[fork.name] = tile.name;
+    savePlan(region);
     renderPlanSummary();
   };
 
@@ -492,7 +568,7 @@ function verdict(result, selected, onAccept) {
   );
 }
 
-function tileContents({ name, route, selected, isSelected, isSuggested = false, notes, origin, dest }) {
+function tileContents({ region, name, route, selected, isSelected, isSuggested = false, notes, origin, dest }) {
   const approx = route.estimated ? '≈ ' : '';
   // The selected tile is green when it is the suggested road at this fork, amber when it is not.
   const relative = isSelected
@@ -503,11 +579,11 @@ function tileContents({ name, route, selected, isSelected, isSuggested = false, 
     el('strong', { className: `duration ${relative.className}`, textContent: `${approx}${formatDuration(route.durationS)}` }),
     el('span', { className: `arrival ${relative.className}`, textContent: `${approx}${formatArrival(route.durationS)}` }),
     el('span', { className: `relative ${relative.className}`, textContent: [relative.text, ...notes].join(' · ') }),
-    routeIcons(route, origin, dest),
+    routeIcons(region, route, origin, dest),
   ];
 }
 
-function forkCard(fork, isNext, model, result, rerender, origin, dest) {
+function forkCard(region, fork, isNext, model, result, rerender, origin, dest) {
   const isSuggestedTile = (tile) =>
     result.recommended.selection.some((alt) => alt.choicePoint === fork.name && alt.name === tile.name);
   const priced = fork.tiles.map((tile) => ({ tile, route: model.routeForTile(fork, tile) })).filter(({ route }) => route);
@@ -540,7 +616,7 @@ function forkCard(fork, isNext, model, result, rerender, origin, dest) {
             if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) select();
           },
         },
-        tileContents({ name: tile.name, route, selected: model.selected, isSelected, isSuggested, notes, origin, dest }),
+        tileContents({ region, name: tile.name, route, selected: model.selected, isSelected, isSuggested, notes, origin, dest }),
       );
     });
   return el('article', { className: `fork ${isNext ? 'next' : ''}` }, [
@@ -549,20 +625,20 @@ function forkCard(fork, isNext, model, result, rerender, origin, dest) {
   ]);
 }
 
-function renderDecision(result, origin, dest) {
-  const card = (route, extra) => routeCard({ route, fastestS: result.fastestS, origin, dest, ...extra });
+function renderDecision(region, result, origin, dest) {
+  const card = (route, extra) => routeCard({ region, route, fastestS: result.fastestS, origin, dest, ...extra });
   const baselineCard = card(result.baseline, {
     title: "Google's own route",
     tags: [result.recommended ? 'For reference, not ranked' : 'No choice points on this trip'],
     className: 'reference',
   });
   if (!result.recommended) {
-    $('results').replaceChildren(baselineCard);
-    return routeNotes(result);
+    region.resultsEl.replaceChildren(baselineCard);
+    return routeNotes(region, result);
   }
 
-  const model = decisionModel(result);
-  const rerender = () => renderDecision(result, origin, dest);
+  const model = decisionModel(region, result);
+  const rerender = () => renderDecision(region, result, origin, dest);
   const googleRow = el('article', { className: 'fork' }, [
     el('h3', { textContent: "Google's own choice (no waypoints)" }),
     el('div', { className: 'tiles' }, [
@@ -570,6 +646,7 @@ function renderDecision(result, origin, dest) {
         'div',
         { className: 'tile reference' },
         tileContents({
+          region,
           name: "Google's fastest",
           route: result.baseline,
           selected: model.selected,
@@ -607,20 +684,20 @@ function renderDecision(result, origin, dest) {
     }
     rerender();
   };
-  $('results').replaceChildren(
+  region.resultsEl.replaceChildren(
     verdict(result, model.selected, acceptSuggestion),
     ...result.forks
       .filter((fork) => fork.tiles.length > 1)
-      .map((fork, i) => forkCard(fork, i === 0, model, result, rerender, origin, dest)),
+      .map((fork, i) => forkCard(region, fork, i === 0, model, result, rerender, origin, dest)),
     googleRow,
     allRoutes,
   );
-  routeNotes(result);
+  routeNotes(region, result);
 }
 
 $('reset-plan').onclick = () => {
-  routePlan = {};
-  store.set('plan', routePlan);
+  activeRegion.plan = {};
+  savePlan(activeRegion);
   renderPlanSummary();
 };
 
@@ -692,9 +769,9 @@ $('api-key').onchange = () => {
 };
 
 renderPlaces();
-renderPlanSummary();
+selectRegion(activeRegion);
 usage.render();
 if (!apiKey) {
   $('settings').open = true;
-  setStatus('Add your Google API key under Settings to get started.');
+  for (const region of REGIONS) setStatus('Add your Google API key under Settings to get started.', false, region);
 }

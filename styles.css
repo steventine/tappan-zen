@@ -492,3 +492,27 @@ td:first-child {
 #swap {
   min-height: 52px;
 }
+
+/* Region tabs: the trip above is shared, everything below belongs to the open tab. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin: 16px 0 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.tabs button {
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--muted);
+  margin-bottom: -1px;
+}
+
+.tabs button[aria-selected='true'] {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--accent);
+  font-weight: 600;
+}

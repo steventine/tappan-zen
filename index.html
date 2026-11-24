@@ -22,8 +22,11 @@
         </div>
       </section>
 
-      <p id="status" role="status"></p>
-      <section id="results"></section>
+      <nav id="region-tabs" class="tabs" role="tablist" aria-label="Region"></nav>
+      <section id="region-panel" role="tabpanel">
+        <p id="status" role="status"></p>
+        <div id="results"></div>
+      </section>
 
       <details id="settings">
         <summary>Settings</summary>
@@ -31,11 +34,12 @@
         <input id="api-key" type="password" autocomplete="off" placeholder="Stored only in this browser" />
         <h2>Saved places</h2>
         <ul id="saved-places"></ul>
-        <h2>Planned route</h2>
+        <h2 id="plan-heading">Planned route</h2>
         <p id="plan-summary" class="hint"></p>
         <button id="reset-plan">Reset to defaults</button>
         <p class="hint">
-          Choice points and penalties are edited in <code>choice-points.json</code>.
+          Choice points and penalties are edited in <code>regions/ny-nj.json</code> and
+          <code>regions/pittsburgh.json</code>.
         </p>
       </details>
 
